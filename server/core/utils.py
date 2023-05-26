@@ -17,6 +17,107 @@ CERT_ID = "PRD-9c7a1d252d9c-ce6c-47c1-b962-69f7"
 TOKEN = "v^1.1#i^1#I^3#p^3#r^1#f^0#t^Ul4xMF8wOjRBOEIzQUVDNkFDOTkxMUE1QzQ4MDgzMjEzREFBOUQ3XzNfMSNFXjI2MA=="
 
 
+def get_item_info(item_id):
+    try:
+        # Use the Finding API to search for the item
+        finding_api = Finding(appid=APP_ID, config_file=None)
+        api_request = {'keywords': item_id, 'outputSelector': 'SellerInfo'}
+        response = finding_api.execute('findItemsByKeywords', api_request)
+        return response.dict()
+
+    except ConnectionError as e:
+        print(e)
+        print(e.response.dict())
+        return None
+
+# Function to extract relevant data from the eBay API response
+def extract_data(response):
+    data = []
+    item = response['searchResult']['item'][0]
+    bid = item['sellingStatus']
+    start_time = datetime.strptime(
+        item['listingInfo']['startTime'], "%Y-%m-%dT%H:%M:%S.%fZ")
+    end_time = datetime.strptime(
+        item['listingInfo']['endTime'], "%Y-%m-%dT%H:%M:%S.%fZ")
+    # Calculate time difference
+    time_left = end_time - start_time
+    time_left_in_seconds = time_left.total_seconds()
+    try:
+        item['listingInfo']['buyItNowPrice']['value']
+    except KeyError:
+        item['listingInfo']['buyItNowPrice'] = {
+            'value': bid['currentPrice']['value']}
+        
+    # listingInfo
+    data.append({
+        'Bidder_Tendency': float(item['sellerInfo']['feedbackScore']) / float(item['sellerInfo']['positiveFeedbackPercent']),
+        'Bidding_Ratio': int(bid['bidCount']) / time_left_in_seconds,
+        'Successive_Outbidding': int(bid['bidCount']) / float(item['listingInfo']['buyItNowPrice']['value']),
+        'Last_Bidding': int(bid['bidCount']) / int(to_seconds(start_time)),
+        'Auction_Bids': int(bid['bidCount']),
+        'Starting_Price_Average': float(bid['currentPrice']['value']) / float(item['listingInfo']['buyItNowPrice']['value']),
+        'Early_Bidding': int(bid['bidCount']) / int(item['sellerInfo']['feedbackScore']),
+        'Winning_Ratio': float(item['sellerInfo']['feedbackScore']) / float(item['sellerInfo']['positiveFeedbackPercent']),
+        'Auction_Duration': time_left_in_seconds,
+    })
+    return data
+
+
+def train_shill_detector(data_path):
+    # Load the data into a pandas DataFrame
+    df = pd.read_csv(data_path)
+
+    # Extract the features you want to use
+    X = df[['Bidder_Tendency', 'Bidding_Ratio', 'Successive_Outbidding', 'Last_Bidding',
+            'Auction_Bids', 'Starting_Price_Average', 'Early_Bidding', 'Winning_Ratio', 'Auction_Duration']]
+    y = df['Class']
+
+    # Split the data into a training and testing set
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42)
+
+    # Train the model
+    logistic_regression = LogisticRegression()
+    logistic_regression.fit(X_train, y_train)
+
+    # Evaluate the model on the testing data
+    y_pred = logistic_regression.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    print("Accuracy:", accuracy)
+    print("Precision:", precision)
+    print("Recall:", recall)
+    # Save the model to a file
+    with open('shill_detector.pkl', 'wb') as handle:
+        pickle.dump(logistic_regression, handle,
+                    protocol=pickle.HIGHEST_PROTOCOL)
+
+    return logistic_regression
+
+
+# Load the model from a file
+with open('shill_detector.pkl', 'rb') as handle:
+    loaded_model = pickle.load(handle)
+
+
+def check_item_is_shill(item_data, model, threshold=0.5) -> bool:
+    # Extract the features from the item data
+    print(item_data)
+    item_features = pd.DataFrame(item_data)
+    # item_features = extract_data(item_data)
+
+    # Use the model to make a prediction
+    prediction = model.predict(item_features)
+    probability = model.predict_proba(item_features)
+    print(prediction, probability)
+    if probability[0][prediction[0]] <= threshold:
+        return True
+    else:
+        return False
+
+    return prediction, probability
+
 def to_seconds(date):
     return time.mktime(date.timetuple())
 
@@ -68,124 +169,6 @@ def scrape_and_get_item_bidders(item_id):
                             'positive' in feedback_score) else 0, 'feedback': feedback_score.replace('positive', '').replace('negative', '')})
     print(bidders_list)
     return bidders
-
-
-def get_item_info(item_id):
-    try:
-        # Use the Finding API to search for the item
-        finding_api = Finding(appid=APP_ID, config_file=None)
-        api_request = {'keywords': item_id, 'outputSelector': 'SellerInfo'}
-        response = finding_api.execute('findItemsByKeywords', api_request)
-        return response.dict()
-
-    except ConnectionError as e:
-        print(e)
-        print(e.response.dict())
-        return None
-
-# Function to extract relevant data from the eBay API response
-def extract_data(response):
-    data = []
-    item = response['searchResult']['item'][0]
-    bid = item['sellingStatus']
-    start_time = datetime.strptime(
-        item['listingInfo']['startTime'], "%Y-%m-%dT%H:%M:%S.%fZ")
-    end_time = datetime.strptime(
-        item['listingInfo']['endTime'], "%Y-%m-%dT%H:%M:%S.%fZ")
-    # Calculate time difference
-    time_left = end_time - start_time
-    time_left_in_seconds = time_left.total_seconds()
-    try:
-        item['listingInfo']['buyItNowPrice']['value']
-    except KeyError:
-        item['listingInfo']['buyItNowPrice'] = {
-            'value': bid['currentPrice']['value']}
-    # print(item)
-    # listingInfo
-    data.append({
-        'Bidder_Tendency': float(item['sellerInfo']['feedbackScore']) / float(item['sellerInfo']['positiveFeedbackPercent']),
-        'Bidding_Ratio': int(bid['bidCount']) / time_left_in_seconds,
-        'Successive_Outbidding': int(bid['bidCount']) / float(item['listingInfo']['buyItNowPrice']['value']),
-        'Last_Bidding': int(bid['bidCount']) / int(to_seconds(start_time)),
-        'Auction_Bids': int(bid['bidCount']),
-        'Starting_Price_Average': float(bid['currentPrice']['value']) / float(item['listingInfo']['buyItNowPrice']['value']),
-        'Early_Bidding': int(bid['bidCount']) / int(item['sellerInfo']['feedbackScore']),
-        'Winning_Ratio': float(item['sellerInfo']['feedbackScore']) / float(item['sellerInfo']['positiveFeedbackPercent']),
-        'Auction_Duration': time_left_in_seconds,
-        # 'Auction_ID': item['sellerInfo']['sellerUserName'],
-    })
-    return data
-
-
-def train_shill_detector(data_path):
-    # Load the data into a pandas DataFrame
-    df = pd.read_csv(data_path)
-
-    # Extract the features you want to use
-    X = df[['Bidder_Tendency', 'Bidding_Ratio', 'Successive_Outbidding', 'Last_Bidding',
-            'Auction_Bids', 'Starting_Price_Average', 'Early_Bidding', 'Winning_Ratio', 'Auction_Duration']]
-    y = df['Class']
-
-    # Split the data into a training and testing set
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42)
-
-    # Train the model
-    logistic_regression = LogisticRegression()
-    logistic_regression.fit(X_train, y_train)
-
-    # Evaluate the model on the testing data
-    y_pred = logistic_regression.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred)
-    recall = recall_score(y_test, y_pred)
-    print("Accuracy:", accuracy)
-    print("Precision:", precision)
-    print("Recall:", recall)
-    # Save the model to a file
-    with open('shill_detector.pkl', 'wb') as handle:
-        pickle.dump(logistic_regression, handle,
-                    protocol=pickle.HIGHEST_PROTOCOL)
-
-    return logistic_regression
-
-# train_shill_detector("shill_bidding_dataset.csv")
-
-
-# Load the model from a file
-with open('shill_detector.pkl', 'rb') as handle:
-    loaded_model = pickle.load(handle)
-
-# # create a dataframe for the new item
-# item_data = pd.DataFrame({
-#     'Bidder_Tendency': [0.5],
-#     'Bidding_Ratio': [0.2],
-#     'Successive_Outbidding': [5],
-#     'Last_Bidding': [100],
-#     'Auction_Bids': [50],
-#     'Starting_Price_Average': [20],
-#     'Early_Bidding': [10],
-#     'Winning_Ratio': [0.4],
-#     'Auction_Duration': [7]
-# })
-
-
-def check_item_is_shill(item_data, model, threshold=0.5) -> bool:
-    # Extract the features from the item data
-    print(item_data)
-    item_features = pd.DataFrame(item_data)
-    # item_features = extract_data(item_data)
-
-    # Use the model to make a prediction
-    prediction = model.predict(item_features)
-    probability = model.predict_proba(item_features)
-    print(prediction, probability)
-    if probability[0][prediction[0]] <= threshold:
-        return True
-    else:
-        return False
-
-    return prediction, probability
 
 
 # check the item using the loaded model
