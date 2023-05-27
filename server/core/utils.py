@@ -101,7 +101,7 @@ with open('shill_detector.pkl', 'rb') as handle:
     loaded_model = pickle.load(handle)
 
 
-def check_item_is_shill(item_data, model, threshold=0.5) -> bool:
+def check_item_is_shill(item_data, model=loaded_model, threshold=0.5) -> bool:
     # Extract the features from the item data
     print(item_data)
     item_features = pd.DataFrame(item_data)
@@ -116,7 +116,7 @@ def check_item_is_shill(item_data, model, threshold=0.5) -> bool:
     else:
         return False
 
-    return prediction, probability
+    # return prediction, probability
 
 def to_seconds(date):
     return time.mktime(date.timetuple())
