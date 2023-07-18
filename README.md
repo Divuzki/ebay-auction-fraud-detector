@@ -1,5 +1,3 @@
-Apologies for the oversight. Here's the updated README.md file with the correct repository name and email:
-
 # eBay Auction Fraud Detector
 
 ![GitHub](https://img.shields.io/github/license/Divuzki/ebay-auction-fraud-detector)
@@ -24,19 +22,38 @@ To run the eBay Auction Fraud Detector, follow these steps:
    git clone https://github.com/Divuzki/ebay-auction-fraud-detector.git
    ```
 
-2. Install the required dependencies:
+2. Navigate to the project directory:
+   ```
+   cd ebay-auction-fraud-detector
+   ```
+
+3. Create a new virtual environment:
+   - For macOS/Linux:
+     ```
+     python3 -m venv env
+     source env/bin/activate
+     ```
+   - For Windows:
+     ```
+     python -m venv env
+     .\env\Scripts\activate
+     ```
+
+   Activating the virtual environment is optional but recommended.
+
+4. Install the required dependencies:
    ```
    pip install -r requirements.txt
    ```
 
-3. Customize the program if needed by modifying the configuration files.
+5. Customize the program if needed by modifying the configuration files.
 
-4. Start the Django server:
+6. Start the Django server:
    ```
    python manage.py runserver
    ```
 
-5. Access the program through the provided URL, e.g., `http://localhost:8000/item/<str:item_id>/scan`.
+7. Access the program through the provided URL, e.g., `http://localhost:8000/item/<str:item_id>/scan`.
 
 ## Usage
 
