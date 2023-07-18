@@ -73,7 +73,7 @@ To train the machine learning model used for shill bidding detection, you can ru
 
 2. Execute the script:
    ```
-   python train_model.py
+   python manage.py train_model
    ```
 
 3. The script will train the model based on the dataset and save the trained model for future use.
