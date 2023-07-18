@@ -78,10 +78,6 @@ To train the machine learning model used for shill bidding detection, you can ru
 
 3. The script will train the model based on the dataset and save the trained model for future use.
 
-## Documentation
-
-For detailed documentation, including usage examples and customization options, please refer to the [link to documentation].
-
 ## License
 
 This project is licensed under the MIT License license. See the [LICENSE](https://github.com/Divuzki/ebay-auction-fraud-detector/blob/main/LICENSE) file for details.
